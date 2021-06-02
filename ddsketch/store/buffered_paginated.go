@@ -7,6 +7,7 @@ package store
 
 import (
 	"errors"
+	"math"
 	"sort"
 
 	"github.com/DataDog/sketches-go/ddsketch/pb/sketchpb"
@@ -492,4 +493,100 @@ func (s *BufferedPaginatedStore) ToProto() *sketchpb.Store {
 	return &sketchpb.Store{
 		BinCounts: binCounts,
 	}
+}
+
+func DecodeBufferedPaginatedStoreBytes(b []byte) (*BufferedPaginatedStore, []byte, error) {
+	pageLenLog2 := defaultPageLenLog2
+	pageLen := 1 << pageLenLog2
+	store := &BufferedPaginatedStore{
+		buffer:                     nil,
+		bufferCompactionTriggerLen: 2 * pageLen,
+		pages:                      nil,
+		minPageIndex:               maxInt,
+		pageLenLog2:                pageLenLog2,
+		pageLenMask:                pageLen - 1,
+	}
+	// TODO: specialize
+	b, err := store.DecodeAndMergeBytes(b)
+	if err != nil {
+		return nil, b, ErrDecoding
+	}
+	return store, b, nil
+}
+
+func (s *BufferedPaginatedStore) DecodeAndMergeBytes(b []byte) ([]byte, error) {
+	// TODO: specialize
+	return FallbackDecodeAndMergeBytes(s, b)
+}
+
+func DecodeBufferedPaginatedStoreIOReader(r IOReader) (*BufferedPaginatedStore, error) {
+	pageLenLog2 := defaultPageLenLog2
+	pageLen := 1 << pageLenLog2
+	store := &BufferedPaginatedStore{
+		buffer:                     nil,
+		bufferCompactionTriggerLen: 2 * pageLen,
+		pages:                      nil,
+		minPageIndex:               maxInt,
+		pageLenLog2:                pageLenLog2,
+		pageLenMask:                pageLen - 1,
+	}
+	// TODO: specialize
+	err := store.DecodeAndMergeIOReader(r)
+	if err != nil {
+		return nil, err
+	}
+	return store, nil
+}
+
+func (s *BufferedPaginatedStore) DecodeAndMergeIOReader(r IOReader) error {
+	// TODO: specialize
+	return FallbackDecodeAndMergeIOReader(s, r)
+}
+
+func DecodeBufferedPaginatedStoreCustomReader(r CustomReader) (*BufferedPaginatedStore, error) {
+	pageLenLog2 := defaultPageLenLog2
+	pageLen := 1 << pageLenLog2
+	store := &BufferedPaginatedStore{
+		buffer:                     nil,
+		bufferCompactionTriggerLen: 2 * pageLen,
+		pages:                      nil,
+		minPageIndex:               maxInt,
+		pageLenLog2:                pageLenLog2,
+		pageLenMask:                pageLen - 1,
+	}
+	// TODO: specialize
+	err := store.DecodeAndMergeCustomReader(r)
+	if err != nil {
+		return nil, err
+	}
+	return store, nil
+}
+
+func (s *BufferedPaginatedStore) DecodeAndMergeCustomReader(r CustomReader) error {
+	return FallbackDecodeAndMergeCustomReader(s, r)
+}
+
+func (s *BufferedPaginatedStore) Encode(bytes []byte) []byte {
+	bytes = append(bytes, EncodingCountOneIndexesInt64)
+	bytes = EncodeVarInt(bytes, uint64(len(s.buffer)))
+	offset := len(bytes)
+	bytes = append(bytes, make([]byte, 8*len(s.buffer))...)
+	for i, index := range s.buffer {
+		byteOrder.PutUint64(bytes[offset+8*i:], uint64(index))
+	}
+
+	for pageOffset, page := range s.pages {
+		if len(page) == 0 {
+			continue
+		}
+		bytes = append(bytes, EncodingContiguousCountsFloat64)
+		bytes = EncodeVarInt(bytes, uint64(s.minPageIndex+pageOffset*(1<<s.pageLenLog2)))
+		bytes = EncodeVarInt(bytes, uint64(len(page)))
+		offset := len(bytes)
+		bytes = append(bytes, make([]byte, 8*len(page))...)
+		for i, count := range page {
+			byteOrder.PutUint64(bytes[offset+8*i:], math.Float64bits(count))
+		}
+	}
+	return bytes
 }

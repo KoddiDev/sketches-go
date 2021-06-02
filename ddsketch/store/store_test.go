@@ -6,6 +6,7 @@
 package store
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"math/rand"
@@ -891,6 +892,158 @@ func BenchmarkNewAndAddWithCountNorm(b *testing.B) {
 	}
 }
 
+type SerTestCase struct {
+	name      string
+	ser       func(*BufferedPaginatedStore) []byte
+	deser     func([]byte) *BufferedPaginatedStore
+	mergeWith func(*BufferedPaginatedStore, []byte)
+}
+
+var (
+	bytesReader  = bytes.NewReader(make([]byte, 0))
+	customReader = NewBytesCustomReader(make([]byte, 0))
+	serTestCases = []SerTestCase{
+		{
+			name: "custom_bytes",
+			ser: func(s *BufferedPaginatedStore) []byte {
+				return s.Encode([]byte{})
+			},
+			deser: func(b []byte) *BufferedPaginatedStore {
+				store, _, _ := DecodeBufferedPaginatedStoreBytes(b)
+				return store
+			},
+			mergeWith: func(s *BufferedPaginatedStore, bytes []byte) {
+				s.DecodeAndMergeBytes(bytes)
+			},
+		},
+		{
+			name: "custom_io_reader",
+			ser: func(s *BufferedPaginatedStore) []byte {
+				return s.Encode([]byte{})
+			},
+			deser: func(b []byte) *BufferedPaginatedStore {
+				bytesReader.Reset(b) // not thread-safe
+				store, _ := DecodeBufferedPaginatedStoreIOReader(bytesReader)
+				return store
+			},
+			mergeWith: func(s *BufferedPaginatedStore, b []byte) {
+				bytesReader.Reset(b)
+				s.DecodeAndMergeIOReader(bytesReader)
+			},
+		},
+		{
+			name: "custom_custom_reader",
+			ser: func(s *BufferedPaginatedStore) []byte {
+				return s.Encode([]byte{})
+			},
+			deser: func(b []byte) *BufferedPaginatedStore {
+				customReader.Reset(b)
+				store, _ := DecodeBufferedPaginatedStoreCustomReader(customReader)
+				return store
+			},
+			mergeWith: func(s *BufferedPaginatedStore, b []byte) {
+				customReader.Reset(b)
+				s.DecodeAndMergeCustomReader(customReader)
+			},
+		},
+	}
+)
+
+func TestMergeWithFuzzy(t *testing.T) {
+	numTests := 100
+	maxNumValues := 64
+
+	random := rand.New(rand.NewSource(seed))
+
+	for _, serTestCase := range serTestCases {
+		t.Run(serTestCase.name, func(t *testing.T) {
+			for i := 0; i < numTests; i++ {
+				bins := make([]Bin, 0)
+				store := NewBufferedPaginatedStore()
+				numValues := random.Intn(maxNumValues)
+				for j := 0; j < numValues; j++ {
+					index := randomIndex(random)
+					bins = append(bins, Bin{index: index, count: 1})
+					store.Add(index)
+				}
+				store2 := NewBufferedPaginatedStore()
+				serTestCase.mergeWith(store2, serTestCase.ser(store))
+				normalizedBins := normalize(bins)
+				assertEncodeBins(t, store2, normalizedBins)
+			}
+		})
+	}
+}
+
+func TestDeserFuzzy(t *testing.T) {
+	numTests := 100
+	maxNumValues := 128
+
+	random := rand.New(rand.NewSource(seed))
+
+	for _, serTestCase := range serTestCases {
+		t.Run(serTestCase.name, func(t *testing.T) {
+			for i := 0; i < numTests; i++ {
+				bins := make([]Bin, 0)
+				store := NewBufferedPaginatedStore()
+				numValues := random.Intn(maxNumValues)
+				for j := 0; j < numValues; j++ {
+					index := randomIndex(random)
+					bins = append(bins, Bin{index: index, count: 1})
+					store.Add(index)
+				}
+				store2 := serTestCase.deser(serTestCase.ser(store))
+				assert.NotNil(t, store2)
+				normalizedBins := normalize(bins)
+				assertEncodeBins(t, store2, normalizedBins)
+			}
+		})
+	}
+}
+
+func BenchmarkMergeWith(b *testing.B) {
+	s := NewBufferedPaginatedStore()
+	for j := 0; j < 10; j++ {
+		s.Add(int(rand.NormFloat64() * 200))
+	}
+	for _, serTestCase := range serTestCases {
+		b.Run(serTestCase.name, func(b *testing.B) {
+			bytes := serTestCase.ser(s)
+			store := NewBufferedPaginatedStore()
+			for i := 0; i < b.N; i++ {
+				serTestCase.mergeWith(store, bytes)
+			}
+		})
+	}
+}
+
+func BenchmarkDeser(b *testing.B) {
+	s := NewBufferedPaginatedStore()
+	for j := 0; j < 64; j++ {
+		s.Add(int(rand.NormFloat64() * 200))
+	}
+	for _, serTestCase := range serTestCases {
+		b.Run(serTestCase.name, func(b *testing.B) {
+			bytes := serTestCase.ser(s)
+			for i := 0; i < b.N; i++ {
+				store := serTestCase.deser(bytes)
+				sink = store
+			}
+		})
+	}
+}
+
+func TestBenchmarkSerializedSize(t *testing.T) {
+	s := NewBufferedPaginatedStore()
+	for j := 0; j < 64; j++ {
+		s.Add(int(rand.NormFloat64() * 200))
+	}
+	for _, serTestCase := range serTestCases {
+		bytes := serTestCase.ser(s)
+		t.Logf("TestBenchmarkSerializedSize/%s %d", serTestCase.name, len(bytes))
+	}
+}
+
 func TestBenchmarkSize(t *testing.T) {
 	for numIndexesLog10 := 0; numIndexesLog10 <= 7; numIndexesLog10++ {
 		numIndexes := int(math.Pow10(numIndexesLog10))
@@ -947,4 +1100,21 @@ func size(t *testing.T, store Store) uintptr {
 		return size
 	}
 	return 0
+}
+
+var sinku uint64
+
+func BenchmarkBufReader(b *testing.B) {
+	x := make([]byte, 16)
+	x[0] = 1
+	x[1] = 1
+	for i := 2; i < len(x); i++ {
+		x[i] = x[i-2] + x[i-1]
+	}
+	for i := 0; i < b.N; i++ {
+		buf := bytes.NewReader(x)
+		u, _ := ReadUint64(buf)
+		// u, _ := buf.ReadByte()
+		sinku += uint64(u)
+	}
 }
