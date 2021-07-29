@@ -10,10 +10,10 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/DataDog/sketches-go/dataset"
-	"github.com/DataDog/sketches-go/ddsketch/mapping"
-	"github.com/DataDog/sketches-go/ddsketch/pb/sketchpb"
-	"github.com/DataDog/sketches-go/ddsketch/store"
+	"github.com/KoddiDev/sketches-go/dataset"
+	"github.com/KoddiDev/sketches-go/ddsketch/mapping"
+	"github.com/KoddiDev/sketches-go/ddsketch/pb/sketchpb"
+	"github.com/KoddiDev/sketches-go/ddsketch/store"
 
 	"github.com/golang/protobuf/proto"
 	fuzz "github.com/google/gofuzz"

@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"math"
 
-	enc "github.com/DataDog/sketches-go/ddsketch/encoding"
-	"github.com/DataDog/sketches-go/ddsketch/pb/sketchpb"
+	enc "github.com/KoddiDev/sketches-go/ddsketch/encoding"
+	"github.com/KoddiDev/sketches-go/ddsketch/pb/sketchpb"
 )
 
 // An IndexMapping that is memory-optimal, that is to say that given a targeted relative accuracy, it

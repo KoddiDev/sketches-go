@@ -9,7 +9,7 @@ import (
 	"math"
 	"sort"
 
-	"github.com/DataDog/sketches-go/ddsketch/stat"
+	"github.com/KoddiDev/sketches-go/ddsketch/stat"
 )
 
 type Dataset struct {

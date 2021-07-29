@@ -9,8 +9,8 @@ import (
 	"errors"
 	"sort"
 
-	enc "github.com/DataDog/sketches-go/ddsketch/encoding"
-	"github.com/DataDog/sketches-go/ddsketch/pb/sketchpb"
+	enc "github.com/KoddiDev/sketches-go/ddsketch/encoding"
+	"github.com/KoddiDev/sketches-go/ddsketch/pb/sketchpb"
 )
 
 type SparseStore struct {

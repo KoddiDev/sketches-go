@@ -10,11 +10,11 @@ import (
 	"io"
 	"math"
 
-	enc "github.com/DataDog/sketches-go/ddsketch/encoding"
-	"github.com/DataDog/sketches-go/ddsketch/mapping"
-	"github.com/DataDog/sketches-go/ddsketch/pb/sketchpb"
-	"github.com/DataDog/sketches-go/ddsketch/stat"
-	"github.com/DataDog/sketches-go/ddsketch/store"
+	enc "github.com/KoddiDev/sketches-go/ddsketch/encoding"
+	"github.com/KoddiDev/sketches-go/ddsketch/mapping"
+	"github.com/KoddiDev/sketches-go/ddsketch/pb/sketchpb"
+	"github.com/KoddiDev/sketches-go/ddsketch/stat"
+	"github.com/KoddiDev/sketches-go/ddsketch/store"
 )
 
 var (
